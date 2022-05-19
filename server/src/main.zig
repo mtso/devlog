@@ -117,13 +117,6 @@ fn handle(conn: net.StreamServer.Connection) !void {
     var buf: [4096]u8 = undefined;
     const stdout = std.io.getStdOut();
 
-    //const request = Request.create(conn, &buf);
-    //const method = context.slurpMethod(context);
-
-    //const method = slurpMethod(conn, &buf) catch |err| {
-    //    return request.handleError(err);
-    //};
-
     const method = try conn.stream.reader().readUntilDelimiterOrEof(&buf, ' ');
     if (method) |m| {
         _ = try stdout.writer().write(m);
@@ -135,11 +128,6 @@ fn handle(conn: net.StreamServer.Connection) !void {
         return;
     }
 
-    if (method == null) {
-        respondBadRequest(conn);
-        return;
-    }
- 
     const pathP = conn.stream.reader().readUntilDelimiterOrEof(&buf, ' ') catch |err| {
         std.log.warn("Failed to parse path: {s}", .{err});
         respondBadRequest(conn);
