@@ -155,7 +155,7 @@ fn handle(conn: net.StreamServer.Connection) !void {
         return;
     };
 
-    const header = "HTTP/1.1 200 OK\nContent-Type: text/plain\n";
+    const header = "HTTP/1.1 200 OK\nContent-Type: text/plain; charset=UTF-8\n";
     const delim = "\n\n";
 
     _ = conn.stream.write(header) catch |e| std.log.err("unable to send: {}\n", .{e});
