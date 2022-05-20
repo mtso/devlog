@@ -109,11 +109,38 @@ fn respondServerError(conn: net.StreamServer.Connection) void {
     };
 }
 
+fn respondIndex(conn: net.StreamServer.Connection) void {
+    {
+        const header = "HTTP/1.1 200 OK\nContent-Type: text/plain; charset=UTF-8\nTransfer-Encoding: chunked";
+        const delim = "\n\n";
+
+        _ = conn.stream.write(header) catch |e| std.log.err("unable to send: {}\n", .{e});
+        _ = conn.stream.write(delim) catch |e| std.log.err("unable to send: {}\n", .{e});
+    }
+
+    const dir = fs.cwd().openDir(".", .{ .iterate = true }) catch |err| {
+        std.log.err("Failed to open index {}", .{ err });
+        return;
+    };
+    var iter = dir.iterate();
+
+    while (iter.next() catch |err| {
+        return std.log.err("Iteration err {}", .{ err });
+    }) |entry| {
+        const chunklen = entry.name.len + 1;
+        _ = conn.stream.writer().print("{x}\r\n", .{ chunklen }) catch |err| {
+            return std.log.err("failed to print name length {}", .{ err });
+        };
+        _ = conn.stream.write(entry.name) catch |e| std.log.err("unable to send: {}\n", .{e});
+        _ = conn.stream.write("\n\r\n") catch |e| std.log.err("unable to send: {}\n", .{e});
+    }
+
+    _ = conn.stream.write("0\r\n\r\n") catch |e| std.log.err("unable to send: {}\n", .{e});
+}
+
 // if path is longer than buffer, return not-found error
 // if path is not found, return not-found
 fn handle(conn: net.StreamServer.Connection) !void {
-    defer conn.stream.close();
-
     var buf: [4096]u8 = undefined;
     const stdout = std.io.getStdOut();
 
@@ -145,7 +172,15 @@ fn handle(conn: net.StreamServer.Connection) !void {
     const path = pathP.?;
     const len = path.len;
     const filename = path[1..len];
-    
+
+    if (mem.eql(u8, "/", path)) {
+        return respondIndex(conn);
+    }
+
+    // Must be deferred AFTER the handling of the index endpoint
+    // because chunked transfer expects the client to close the request.
+    defer conn.stream.close();
+
     const res = Resource.init(filename) catch |err| {
         if (err == ResourceError.NotFound) {
             respondNotFound(conn);
